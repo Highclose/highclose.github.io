@@ -14,9 +14,10 @@
 # please change the belowing settings to your own.
 
 # Site settings
-title: Renge
+title: Highclose
 email: allanholmes@163.com
-description: Renge is a Jekyll theme that is designed by Junchao (www.junchaowang.com) and inspired by amination “のんのんびより” and named by one of the Characters "Renge Miyauchi (宮内 れんげ Miyauchi Renge)".
+# description: Renge is a Jekyll theme that is designed by Junchao (www.junchaowang.com) and inspired by amination “のんのんびより” and named by one of the Characters "Renge Miyauchi (宮内 れんげ Miyauchi Renge)".
+description:
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://highclose.github.io/" # the base hostname & protocol for your site
 twitter_username:
