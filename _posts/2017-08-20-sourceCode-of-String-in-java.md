@@ -562,13 +562,9 @@ keywords: "java source"
 
   ```
   public String[] split(String regex, int limit) {
-      /* fastpath if the regex is a
-       (1)one-char String and this character is not one of the
-          RegEx's meta characters ".$|()[{^?*+\\", or
-       (2)two-char String and the first char is the backslash and
-          the second is not the ascii digit or ascii letter.
-       */
       char ch = 0;
+      //如果regex长度为1，且不在".$|()[{^?*+\\"中
+      //如果regex长度为2，第一位是"\",第二位不是数字或者字母
       if (((regex.value.length == 1 &&
            ".$|()[{^?*+\\".indexOf(ch = regex.charAt(0)) == -1) ||
            (regex.length() == 2 &&
@@ -587,8 +583,8 @@ keywords: "java source"
               if (!limited || list.size() < limit - 1) {
                   list.add(substring(off, next));
                   off = next + 1;
-              } else {    // last one
-                  //assert (list.size() == limit - 1);
+              } else {    // 最后一个
+                  //断言 (list.size() == limit - 1);
                   list.add(substring(off, value.length));
                   off = value.length;
                   break;
@@ -598,11 +594,11 @@ keywords: "java source"
           if (off == 0)
               return new String[]{this};
 
-          // Add remaining segment
+          // 把字符串剩下的子字符串放入列表
           if (!limited || list.size() < limit)
               list.add(substring(off, value.length));
 
-          // Construct result
+          // 结果
           int resultSize = list.size();
           if (limit == 0) {
               while (resultSize > 0 && list.get(resultSize - 1).length() == 0) {
@@ -610,8 +606,85 @@ keywords: "java source"
               }
           }
           String[] result = new String[resultSize];
+          //列表转化为数组
           return list.subList(0, resultSize).toArray(result);
       }
+      //其他条件调用了Pattern
       return Pattern.compile(regex).split(this, limit);
   }
   ```
+
+* indexOf
+
+  ```
+  //source 原字符数组
+  //sourceOffset 原数组位移
+  //sourceCount 原数组长度
+  //target 查找字符数组
+  //targetOffset 查找字符数组位移
+  //targetCount 目标长度
+  //fromIndex 查找开始位置
+  static int indexOf(char[] source, int sourceOffset, int sourceCount,
+          char[] target, int targetOffset, int targetCount,
+          int fromIndex) {
+      //位置超过原数组长度，目标长度如果为0，则返回原数组长度，否则返回-1
+      if (fromIndex >= sourceCount) {
+          return (targetCount == 0 ? sourceCount : -1);
+      }
+      if (fromIndex < 0) {
+          fromIndex = 0;
+      }
+      //目标长度为0，返回fromIndex
+      if (targetCount == 0) {
+          return fromIndex;
+      }
+      //目标字符数组第一个字符
+      char first = target[targetOffset];
+      //原数组最大查找位置
+      int max = sourceOffset + (sourceCount - targetCount);
+
+      for (int i = sourceOffset + fromIndex; i <= max; i++) {
+          //先比较第一个字符是否相等
+          if (source[i] != first) {
+              while (++i <= max && source[i] != first);
+          }
+
+          //第一个字符相等
+          if (i <= max) {
+              int j = i + 1;
+              int end = j + targetCount - 1;
+              for (int k = targetOffset + 1; j < end && source[j]
+                      == target[k]; j++, k++);
+
+              if (j == end) {
+                  //找到
+                  return i - sourceOffset;
+              }
+          }
+      }
+      return -1;
+  }
+  ```
+
+* 连接
+
+  ```
+  //delimiter 分隔符
+  //elements 需要连接的数据(String,StringBuilder,StringBuffer)
+  public static String join(CharSequence delimiter, CharSequence... elements) {
+      Objects.requireNonNull(delimiter);
+      Objects.requireNonNull(elements);
+      StringJoiner joiner = new StringJoiner(delimiter);
+      for (CharSequence cs: elements) {
+          joiner.add(cs);
+      }
+      return joiner.toString();
+  }
+  ```
+
+4.String的不可变性
+
+* final修饰符，保证不被继承
+* 成员变量为private,且没有setter方法，保证不会被修改
+* 传入的成员都进行拷贝，保证不会被传入的数据改变。
+* 返回时也进行拷贝
