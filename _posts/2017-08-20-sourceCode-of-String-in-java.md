@@ -8,11 +8,10 @@ keywords: "java source"
 
 
 
-1.implements
+1. implements
 
 	    java.io.Serializable, Comparable<String>, CharSequence
-
-2.fields
+2. fields
 
 * 保存字符数组. 
 
@@ -34,7 +33,7 @@ keywords: "java source"
       public static final Comparator<String> CASE_INSENSITIVE_ORDER = new CaseInsensitiveComparator();
   ​    
 
-3.methods
+3. methods
 
 * String的无参构造函数，创建一个空字符序列的实例，但是因为String类型是不可变的，所以这个构造函数是不需要用到的（毕竟一个空的字符串也没啥用，只要用“”表示就好了）。
   ​    
@@ -682,7 +681,13 @@ keywords: "java source"
   }
   ```
 
-4.String的不可变性
+* public native String intern()
+
+  返回一个规范化的字符串。String类私有的维护一个初始为空的字符串池。当本方法调用时，如果池中已经有一个相同值的字符串（使用equals(String)方法），则返回池中的字符串，否则，把本字符串添加到池中，并返回这个字符串的引用。
+
+  ​
+
+4. String的不可变性
 
 * final修饰符，保证不被继承
 * 成员变量为private,且没有setter方法，保证不会被修改
