@@ -1,13 +1,35 @@
-# Thinkspace v2.1
+# Simpleyyt
 
-Thinkspace is just another minimalist Jekyll theme which is best suit for technical writing, but not limited to. Good for personal blog type too or project-based blog. Disqus comment is included.
+My blog based on Jekyll-Bootstrap.
 
-[**Live Demo**](http://heiswayi.github.io/thinkspace/)
+## About Jekyll-Bootstrap
 
-### Screenshot
+For all usage and documentation please see: <http://jekyllbootstrap.com>
 
-![Thinkspace Screenshot](http://i.imgur.com/IMQDB9e.png)
+## About theme
 
-### License
+This theme is the copy of [elementaryOS](http://elementaryos.org) portal page. Some features are imperfect, but I will make it more perfect.
 
-[MIT](LICENSE.md)
+## Usage
+
+You can edit the `_config.yml` file to change the setting of site. If you want to change avatar or favicon, just replace the files in `assets\themes\Snail\img`.
+
+## About excerpt
+
+There are 2 ways of excerpt: "teaser" and "truncate_words" (Configurated in _config.yml).
+
+ * "teaser": look for the More tag (<!--more-->) and create a teaser from the content that precedes the More tag.
+You must place "<!--more-->" at paragraph in post. The whole content will be displayed in homepage if no More tag found in post.
+
+ * "truncate_words": generate an excerpt automatically by selecting the first 20 words of the post. It doesn't work well in some of no-English post.
+
+## Change Log
+
+ * Add pagination.
+ * Add new way of excerpt.
+ * Download google fonts to the local.
+ * Add google custom search engine.
+
+## License
+
+[MIT](http://opensource.org/licenses/MIT)

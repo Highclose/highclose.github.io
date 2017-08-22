@@ -1,16 +1,19 @@
 ---
 layout: post
+category: java
 title:  "Source code of String in java."
 comments: true
 description: "Analyze source code of String."
-keywords: "java source"
+tags: [java, source]
 ---
 
+String的源码分析。
 
+<!--more-->
 
 1. implements
 
-	    java.io.Serializable, Comparable<String>, CharSequence
+      java.io.Serializable, Comparable<String>, CharSequence
 2. fields
 
 * 保存字符数组. 

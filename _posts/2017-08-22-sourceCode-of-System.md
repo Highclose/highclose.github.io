@@ -1,10 +1,17 @@
 ---
 layout: post
+category: java
 title:  "Source code of System in java."
 comments: true
 description: "Analyze source code of System."
-keywords: "java source"
+tags: [java,source]
 ---
+
+
+
+System的源码分析。
+
+<!--more-->
 
 1. fields
 
