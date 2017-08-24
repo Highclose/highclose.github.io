@@ -392,57 +392,97 @@ System的源码分析。
          props = new Properties();
          initProperties(props);  // 由VM初始化
 
-         // There are certain system configurations that may be controlled by
-         // VM options such as the maximum amount of direct memory and
-         // Integer cache size used to support the object identity semantics
-         // of autoboxing.  Typically, the library will obtain these values
-         // from the properties set by the VM.  If the properties are for
-         // internal implementation use only, these properties should be
-         // removed from the system properties.
-         //
-         // See java.lang.Integer.IntegerCache and the
-         // sun.misc.VM.saveAndRemoveProperties method for example.
-         //
-         // Save a private copy of the system properties object that
-         // can only be accessed by the internal implementation.  Remove
-         // certain system properties that are not intended for public access.
+         //VM options可能会控制一些特定的系统配置，比如直接内存的最大容量和用来支持对象自动装箱的Integer cache.通常，库通常会在VM设置的属性中获取这些值。
+         //如果属性只是内部使用，那就应该在系统属性中移除这些属性。
+         //可以参考java.lang.Integer.IntegerCache和sun.misc.VM.saveAndRemoveProperties方法
+         //保存一个只能由内部接口获取的系统属性对象的私有拷贝。移除不是用来公开获取的系统属性
          sun.misc.VM.saveAndRemoveProperties(props);
-
 
          lineSeparator = props.getProperty("line.separator");
          sun.misc.Version.init();
-
+      
          FileInputStream fdIn = new FileInputStream(FileDescriptor.in);
          FileOutputStream fdOut = new FileOutputStream(FileDescriptor.out);
          FileOutputStream fdErr = new FileOutputStream(FileDescriptor.err);
          setIn0(new BufferedInputStream(fdIn));
          setOut0(newPrintStream(fdOut, props.getProperty("sun.stdout.encoding")));
          setErr0(newPrintStream(fdErr, props.getProperty("sun.stderr.encoding")));
-
+      
      	//载入zip库，使java.util.zip.ZipFile之后不需要自己来加载
          loadLibrary("zip");
-
+      
          // 为HUP, TERM, and INT (如果存在).配置Java信号
          Terminator.setup();
-
-         // Initialize any miscellenous operating system settings that need to be
-         // set for the class libraries. Currently this is no-op everywhere except
-         // for Windows where the process-wide error mode is set before the java.io
-         // classes are used.
+      
          //初始化类库需要的各种操作系统配置。
+         //目前这个操作不会起到作用，除了在windows中，java.io类使用前就会设置进程范围错误模式。
          sun.misc.VM.initializeOSEnvironment();
-
+      
      	//主线程还没有像其他线程一样被添加到到主线程的线程组中；这里我们手动来添加。
          Thread current = Thread.currentThread();
          current.getThreadGroup().add(current);
-
+      
          //注册共享密钥
          setJavaLangAccess();
-
-         // Subsystems that are invoked during initialization can invoke
-         // sun.misc.VM.isBooted() in order to avoid doing things that should
-         // wait until the application class loader has been set up.
-         // IMPORTANT: Ensure that this remains the last initialization action!
+      
+         //子系统在初始化过程中可以调用sun.misc.VM.isBooted()来避免执行一些应该等到应用class loader设置完成前的动作。
+         //重要：保证这个方法在初始化动作的最后再调用
          sun.misc.VM.booted();
+     }
+     ```
+
+   * //
+
+     ```
+     private static void setJavaLangAccess() {
+         //允许java.lang之外经过授权的类
+         sun.misc.SharedSecrets.setJavaLangAccess(new sun.misc.JavaLangAccess(){
+             public sun.reflect.ConstantPool getConstantPool(Class<?> klass) {
+                 return klass.getConstantPool();
+             }
+             public boolean casAnnotationType(Class<?> klass, AnnotationType oldType, AnnotationType newType) {
+                 return klass.casAnnotationType(oldType, newType);
+             }
+             public AnnotationType getAnnotationType(Class<?> klass) {
+                 return klass.getAnnotationType();
+             }
+             public Map<Class<? extends Annotation>, Annotation> getDeclaredAnnotationMap(Class<?> klass) {
+                 return klass.getDeclaredAnnotationMap();
+             }
+             public byte[] getRawClassAnnotations(Class<?> klass) {
+                 return klass.getRawAnnotations();
+             }
+             public byte[] getRawClassTypeAnnotations(Class<?> klass) {
+                 return klass.getRawTypeAnnotations();
+             }
+             public byte[] getRawExecutableTypeAnnotations(Executable executable) {
+                 return Class.getExecutableTypeAnnotationBytes(executable);
+             }
+             public <E extends Enum<E>>
+                     E[] getEnumConstantsShared(Class<E> klass) {
+                 return klass.getEnumConstantsShared();
+             }
+             public void blockedOn(Thread t, Interruptible b) {
+                 t.blockedOn(b);
+             }
+             public void registerShutdownHook(int slot, boolean registerShutdownInProgress, Runnable hook) {
+                 Shutdown.add(slot, registerShutdownInProgress, hook);
+             }
+             public int getStackTraceDepth(Throwable t) {
+                 return t.getStackTraceDepth();
+             }
+             public StackTraceElement getStackTraceElement(Throwable t, int i) {
+                 return t.getStackTraceElement(i);
+             }
+             public String newStringUnsafe(char[] chars) {
+                 return new String(chars, true);
+             }
+             public Thread newThreadWithAcc(Runnable target, AccessControlContext acc) {
+                 return new Thread(target, acc);
+             }
+             public void invokeFinalize(Object o) throws Throwable {
+                 o.finalize();
+             }
+         });
      }
      ```
