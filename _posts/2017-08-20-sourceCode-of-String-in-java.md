@@ -321,6 +321,23 @@ String的源码分析。
   }
   ```
 
+* 复制字符串索引从`srcBegin`到`srcEnd-1`为止的字符到`dst[]`从`dstBegin`开始的数组中。
+
+  ```
+  public void getChars(int srcBegin, int srcEnd, char dst[], int dstBegin) {
+      if (srcBegin < 0) {
+          throw new StringIndexOutOfBoundsException(srcBegin);
+      }
+      if (srcEnd > value.length) {
+          throw new StringIndexOutOfBoundsException(srcEnd);
+      }
+      if (srcBegin > srcEnd) {
+          throw new StringIndexOutOfBoundsException(srcEnd - srcBegin);
+      }
+      System.arraycopy(value, srcBegin, dst, dstBegin, srcEnd - srcBegin);
+  }
+  ```
+
 * 判断相等
 
   ```
