@@ -178,4 +178,42 @@ FileInputStream 的源码分析。
             }
          });
      }
+
+         private native void close0() throws IOException;
+
+     ```
+
+   * 返回当前流使用的表示系统中真实文件连接的`FileDesciptor`
+
+     ```
+     public final FileDescriptor getFD() throws IOException {
+         if (fd != null) {
+             return fd;
+         }
+         throw new IOException();
+     }
+     ```
+
+   * 返回这个流唯一的`FileChannel`,返回的通道的起始位置等于文件已经读取字节的数量。读取文件会增加通道的位置。修改通道的位置，也会修改流中文件的位置。
+
+     ```
+     public FileChannel getChannel() {
+         synchronized (this) {
+             if (channel == null) {
+                 channel = FileChannelImpl.open(fd, path, true, false, this);
+             }
+             return channel;
+         }
+     }
+     ```
+
+   * 保证当前流不再被引用时,`close`方法会被调用。
+
+     ```
+     protected void finalize() throws IOException {
+         if ((fd != null) &&  (fd != FileDescriptor.in)) {
+              所有使用fd的引用都不可达的时候，我们调用close()
+             close();
+         }
+     }
      ```
