@@ -240,3 +240,508 @@ File实例是不可变的。一旦创建，File对象表示的抽象路径就不
          return path.substring(index + 1);
      }
      ```
+
+   * 返回父路径。
+
+     ```
+     public String getParent() {
+         int index = path.lastIndexOf(separatorChar);
+         if (index < prefixLength) {
+             if ((prefixLength > 0) && (path.length() > prefixLength))
+             	//文件夹上级目录
+                 return path.substring(0, prefixLength);
+             return null;
+         }
+         //文件父目录
+         return path.substring(0, index);
+     }
+     ```
+
+   * 获取父路径的`File`实例
+
+     ```
+     public File getParentFile() {
+         String p = this.getParent();
+         if (p == null) return null;
+         return new File(p, this.prefixLength);
+     }
+     ```
+
+   * 获取抽象路径
+
+     ```
+     public String getPath() {
+         return path;
+     }
+     ```
+
+   * 测试路径是否为绝对路径。Unix下为“/”开头，Windows下为，磁盘路径加“\\\”或者“\\\\\\\"
+
+     ```
+     public boolean isAbsolute() {
+         return fs.isAbsolute(this);
+     }
+     ```
+
+   * 获取绝对路径。
+
+     ```
+     public String getAbsolutePath() {
+         return fs.resolve(this);
+     }
+     ```
+
+   * 获取绝对路径的`File`实例
+
+     ```
+     public File getAbsoluteFile() {
+         String absPath = getAbsolutePath();
+         return new File(absPath, fs.prefixLength(absPath));
+     }
+     ```
+
+   * 获取标准化路径。首先将路径转化为绝对路径，去除多余的路径名比如".","..",处理Unix的符号链接，转换Windows的磁盘字符为标准的大小写。
+
+     ```
+     public String getCanonicalPath() throws IOException {
+         if (isInvalid()) {
+             throw new IOException("Invalid file path");
+         }
+         return fs.canonicalize(fs.resolve(this));
+     }
+     ```
+
+   * 获取标准化路径的`File`实例。与`new File(this.getCanonicalPath)`等价。
+
+     ```
+     public File getCanonicalFile() throws IOException {
+         String canonPath = getCanonicalPath();
+         return new File(canonPath, fs.prefixLength(canonPath));
+     }
+     ```
+
+   * 将分割字符转化为"/"
+
+     ```
+     private static String slashify(String path, boolean isDirectory) {
+         String p = path;
+         if (File.separatorChar != '/')
+             p = p.replace(File.separatorChar, '/');
+         if (!p.startsWith("/"))
+             p = "/" + p;
+         if (!p.endsWith("/") && isDirectory)
+             p = p + "/";
+         return p;
+     }
+     ```
+
+   * 将路径转化为URI
+
+     ```
+     public URI toURI() {
+         try {
+             File f = getAbsoluteFile();
+             String sp = slashify(f.getPath(), f.isDirectory());
+             if (sp.startsWith("//"))
+                 sp = "//" + sp;
+             return new URI("file", null, sp, null);
+         } catch (URISyntaxException x) {
+             throw new Error(x);         
+         }
+     }
+     ```
+
+   * 检查应用是否可以读取指定的文件。
+
+     ```
+     public boolean canRead() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.checkAccess(this, FileSystem.ACCESS_READ);
+     }
+     ```
+
+   * 检查应用是否可以写入指定的文件。
+
+     ```
+     public boolean canWrite() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkWrite(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.checkAccess(this, FileSystem.ACCESS_WRITE);
+     }
+     ```
+
+   * 检查文件是否存在
+
+     ```
+     public boolean exists() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return ((fs.getBooleanAttributes(this) & FileSystem.BA_EXISTS) != 0);
+     }
+     ```
+
+   * 检测路径是否为文件夹
+
+     ```
+     public boolean isDirectory() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return ((fs.getBooleanAttributes(this) & FileSystem.BA_DIRECTORY)
+                 != 0);
+     }
+     ```
+
+   * 是否为文件。
+
+     ```
+     public boolean isFile() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return ((fs.getBooleanAttributes(this) & FileSystem.BA_REGULAR) != 0);
+     }
+     ```
+
+   * 是否为隐藏文件
+
+     ```
+     public boolean isHidden() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return ((fs.getBooleanAttributes(this) & FileSystem.BA_HIDDEN) != 0);
+     }
+     ```
+
+   * 上次修改时间
+
+     ```
+     public long lastModified() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return 0L;
+         }
+         return fs.getLastModifiedTime(this);
+     }
+     ```
+
+   * 文件大小，单位为字节。
+
+     ```
+     public long length() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return 0L;
+         }
+         return fs.getLength(this);
+     }
+     ```
+
+   * 在文件不存在的状况下，原子级的创建一个空文件。判断文件是否存在和如果不存在则创建文件是一个原子操作。
+
+     ```
+     public boolean createNewFile() throws IOException {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) security.checkWrite(path);
+         if (isInvalid()) {
+             throw new IOException("Invalid file path");
+         }
+         return fs.createFileExclusively(path);
+     }
+     ```
+
+   * 删除文件。如果为文件夹，则文件夹里必须为空。
+
+     ```
+     public boolean delete() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkDelete(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.delete(this);
+     }
+     ```
+
+   * VM终止时删除文件。只有正常终止时，动作才会生效。操作一旦提交，则不能再撤销。
+
+     ```
+     public void deleteOnExit() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkDelete(path);
+         }
+         if (isInvalid()) {
+             return;
+         }
+         DeleteOnExitHook.add(path);
+     }
+     ```
+
+   * 返回文件和文件夹名字的字符串数组。如果当前路径不是文件夹，则返回`null`，数组是无序的。
+
+     ```
+     public String[] list() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkRead(path);
+         }
+         if (isInvalid()) {
+             return null;
+         }
+         return fs.list(this);
+     }
+     ```
+
+   * 过滤返回的文件名和文件夹名数组。
+
+     ```
+     public String[] list(FilenameFilter filter) {
+         String names[] = list();
+         if ((names == null) || (filter == null)) {
+             return names;
+         }
+         List<String> v = new ArrayList<>();
+         for (int i = 0 ; i < names.length ; i++) {
+             if (filter.accept(this, names[i])) {
+                 v.add(names[i]);
+             }
+         }
+         return v.toArray(new String[v.size()]);
+     }
+     ```
+
+   * 返回当前路径下所有的`File`实例
+
+     ```
+     public File[] listFiles() {
+         String[] ss = list();
+         if (ss == null) return null;
+         int n = ss.length;
+         File[] fs = new File[n];
+         for (int i = 0; i < n; i++) {
+             fs[i] = new File(ss[i], this);
+         }
+         return fs;
+     }
+     ```
+
+   * 过滤当前路径下的`File`实例数组
+
+     ```
+     public File[] listFiles(FilenameFilter filter) {
+         String ss[] = list();
+         if (ss == null) return null;
+         ArrayList<File> files = new ArrayList<>();
+         for (String s : ss)
+             if ((filter == null) || filter.accept(this, s))
+                 files.add(new File(s, this));
+         return files.toArray(new File[files.size()]);
+     }
+     ```
+
+   * 过滤
+
+     ```
+     public File[] listFiles(FileFilter filter) {
+         String ss[] = list();
+         if (ss == null) return null;
+         ArrayList<File> files = new ArrayList<>();
+         for (String s : ss) {
+             File f = new File(s, this);
+             if ((filter == null) || filter.accept(f))
+                 files.add(f);
+         }
+         return files.toArray(new File[files.size()]);
+     }
+     ```
+
+   * 创建文件夹
+
+     ```
+     public boolean mkdir() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkWrite(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.createDirectory(this);
+     }
+     ```
+
+   * 创建文件夹，包括创建不存在的父文件夹。如果文件夹创建失败，父目录是有可能已创建成功的
+
+     ```
+     public boolean mkdirs() {
+     	//如果已存在
+         if (exists()) {
+             return false;
+         }
+         //如果不需要创建父目录
+         if (mkdir()) {
+             return true;
+         }
+         File canonFile = null;
+         try {
+             canonFile = getCanonicalFile();
+         } catch (IOException e) {
+             return false;
+         }
+
+         File parent = canonFile.getParentFile();
+         //递归
+         return (parent != null && (parent.mkdirs() || parent.exists()) &&
+                 canonFile.mkdir());
+     }
+     ```
+
+   * 重命名。操作可能不能把文件从一个文件系统中移动另外一个，操作可能不是原子的，如果目的路径已存在也会失败。
+
+     ```
+     public boolean renameTo(File dest) {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkWrite(path);
+             security.checkWrite(dest.path);
+         }
+         if (dest == null) {
+             throw new NullPointerException();
+         }
+         if (this.isInvalid() || dest.isInvalid()) {
+             return false;
+         }
+         return fs.rename(this, dest);
+     }
+     ```
+
+   * 修改最后修改时间
+
+     ```
+     public boolean setLastModified(long time) {
+         if (time < 0) throw new IllegalArgumentException("Negative time");
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkWrite(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.setLastModifiedTime(this, time);
+     }
+     ```
+
+   * 设为只读
+
+     ```
+     public boolean setReadOnly() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkWrite(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.setReadOnly(this);
+     }
+     ```
+
+   * 设为可写入，`writable`表示写入权限，`ownerOnly`表示是否只有所有者才能写入。
+
+     ```
+     public boolean setWritable(boolean writable, boolean ownerOnly) {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkWrite(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.setPermission(this, FileSystem.ACCESS_WRITE, writable, ownerOnly);
+     }
+     ```
+
+   * 所有者才能写入的简单方法。其他类似的`setReadable`和`setExecutable`都有这两个方法。
+
+     ```
+     public boolean setWritable(boolean writable) {
+         return setWritable(writable, true);
+     }
+     ```
+
+   * 检测文件是否可执行。
+
+     ```
+     public boolean canExecute() {
+         SecurityManager security = System.getSecurityManager();
+         if (security != null) {
+             security.checkExec(path);
+         }
+         if (isInvalid()) {
+             return false;
+         }
+         return fs.checkAccess(this, FileSystem.ACCESS_EXECUTE);
+     }
+     ```
+
+   * 文件系统根目录。标准化路径就是以更目录开头。
+
+     ```
+     public static File[] listRoots() {
+         return fs.listRoots();
+     }
+     ```
+
+   * //
+
+     ```
+     public long getTotalSpace() {
+         SecurityManager sm = System.getSecurityManager();
+         if (sm != null) {
+             sm.checkPermission(new RuntimePermission("getFileSystemAttributes"));
+             sm.checkRead(path);
+         }
+         if (isInvalid()) {
+             return 0L;
+         }
+         return fs.getSpace(this, FileSystem.SPACE_TOTAL);
+     }
+     ```
