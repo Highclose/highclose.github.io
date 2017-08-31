@@ -842,7 +842,6 @@ File实例是不可变的。一旦创建，File对象表示的抽象路径就不
                  try {
                      sm.checkWrite(f.getPath());
                  } catch (SecurityException se) {
-                     // don't reveal temporary directory location
                      if (directory == null)
                          throw new SecurityException("Unable to create temporary file");
                      throw se;
@@ -854,5 +853,34 @@ File实例是不可变的。一旦创建，File对象表示的抽象路径就不
              throw new IOException("Unable to create temporary file");
 
          return f;
+     }
+     ```
+
+   * 使用默认路径创建临时文件
+
+     ```
+     public static File createTempFile(String prefix, String suffix)
+         throws IOException
+     {
+         return createTempFile(prefix, suffix, null);
+     }
+     ```
+
+   * 比较。抽象路径在Unix中大小写敏感，Windows则不然
+
+     ```
+     public int compareTo(File pathname) {
+         return fs.compare(this, pathname);
+     }
+     ```
+
+   * 判断相等
+
+     ```
+     public boolean equals(Object obj) {
+         if ((obj != null) && (obj instanceof File)) {
+             return compareTo((File)obj) == 0;
+         }
+         return false;
      }
      ```
