@@ -730,7 +730,7 @@ File实例是不可变的。一旦创建，File对象表示的抽象路径就不
      }
      ```
 
-   * //
+   * 返回分区总大小。
 
      ```
      public long getTotalSpace() {
@@ -743,5 +743,116 @@ File实例是不可变的。一旦创建，File对象表示的抽象路径就不
              return 0L;
          }
          return fs.getSpace(this, FileSystem.SPACE_TOTAL);
+     }
+     ```
+
+   * 返回分区空余空间
+
+     ```
+     public long getFreeSpace() {
+         SecurityManager sm = System.getSecurityManager();
+         if (sm != null) {
+             sm.checkPermission(new RuntimePermission("getFileSystemAttributes"));
+             sm.checkRead(path);
+         }
+         if (isInvalid()) {
+             return 0L;
+         }
+         return fs.getSpace(this, FileSystem.SPACE_FREE);
+     }
+     ```
+
+   * 返回已使用空间
+
+     ```
+     public long getUsableSpace() {
+         SecurityManager sm = System.getSecurityManager();
+         if (sm != null) {
+             sm.checkPermission(new RuntimePermission("getFileSystemAttributes"));
+             sm.checkRead(path);
+         }
+         if (isInvalid()) {
+             return 0L;
+         }
+         return fs.getSpace(this, FileSystem.SPACE_USABLE);
+     }
+     ```
+
+   * 临时文件类
+
+     ```
+     private static class TempDirectory {
+         private TempDirectory() { }
+
+         //临时文件路径
+         private static final File tmpdir = new File(AccessController
+             .doPrivileged(new GetPropertyAction("java.io.tmpdir")));
+         static File location() {
+             return tmpdir;
+         }
+
+         //生成文件名
+         private static final SecureRandom random = new SecureRandom();
+         static File generateFile(String prefix, String suffix, File dir)
+             throws IOException
+         {
+             long n = random.nextLong();
+             if (n == Long.MIN_VALUE) {
+                 n = 0;      // corner case
+             } else {
+                 n = Math.abs(n);
+             }
+
+             //使用指定前缀的文件名
+             prefix = (new File(prefix)).getName();
+
+             String name = prefix + Long.toString(n) + suffix;
+             File f = new File(dir, name);
+             if (!name.equals(f.getName()) || f.isInvalid()) {
+                 if (System.getSecurityManager() != null)
+                     throw new IOException("Unable to create temporary file");
+                 else
+                     throw new IOException("Unable to create temporary file, " + f);
+             }
+             return f;
+         }
+     }
+     ```
+
+   * 在指定的文件夹中生成一个空白的文件。方法调用成功表示方法调用前文件不存在，而且在当前VM的调用中，不会再生成相同的路径。
+
+     ```
+     public static File createTempFile(String prefix, String suffix,
+                                       File directory)
+         throws IOException
+     {
+         if (prefix.length() < 3)
+             throw new IllegalArgumentException("Prefix string too short");
+         if (suffix == null)
+             suffix = ".tmp";
+
+         File tmpdir = (directory != null) ? directory
+                                           : TempDirectory.location();
+         SecurityManager sm = System.getSecurityManager();
+         File f;
+         do {
+             f = TempDirectory.generateFile(prefix, suffix, tmpdir);
+
+             if (sm != null) {
+                 try {
+                     sm.checkWrite(f.getPath());
+                 } catch (SecurityException se) {
+                     // don't reveal temporary directory location
+                     if (directory == null)
+                         throw new SecurityException("Unable to create temporary file");
+                     throw se;
+                 }
+             }
+         } while ((fs.getBooleanAttributes(f) & FileSystem.BA_EXISTS) != 0);
+
+         if (!fs.createFileExclusively(f.getPath()))
+             throw new IOException("Unable to create temporary file");
+
+         return f;
      }
      ```
