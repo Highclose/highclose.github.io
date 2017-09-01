@@ -1,5 +1,6 @@
 ---
-layout: default
+layout: layout
 ---
-{% include JB/setup %}
-{% include themes/Snail/archive.html %}
+
+{% assign __ = site.data.languages[site.language] %}
+{% include archive.html %}
