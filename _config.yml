@@ -16,13 +16,13 @@ recent_num: 20
 # Social account
 twitter: 
 weibo: 
-github: highclose.github.com
+github: highclose
 instagram: 
 linkedin: 
 
 # avatar and Favicon
 avatar: /assets/img/icon.jpg
-favicon: http://7u2ho6.com1.z0.glb.clouddn.com/site-favicon.ico
+favicon: /assets/img/icon.ico
 
 # disqus config
 disqus:
