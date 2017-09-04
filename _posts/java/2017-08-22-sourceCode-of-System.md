@@ -12,42 +12,42 @@ tags: [java,source]
 
 ### 静态代码块，VM会调用`initializeSystemClass`方法来完成初始化，与clinit相互独立。
 
-     ```
+     
          private static native void registerNatives();
          static {
              registerNatives();
          }
-     ```
+     
 
 ### 标准输入流。这个流是已经打开了并且已经可以输入了。
 
-     ```
+     
      public final static InputStream in = null;
-     ```
+     
 
 ### 标准输出流。这个流是已经打开的并且可以接受输出了。
 
-     ```
+     
      public final static PrintStream out = null;
-     ```
+     
 
 ### 标准错误输出流。out被重定向到文件或其他路径用来做监控。
 
-     ```
+     
      public final static PrintStream err = null;
-     ```
+     
 
 ### 安全管理器
 
-     ```
+     
      private static volatile SecurityManager security = null;
-     ```
+     
 
 ### 控制台
 
-     ```
+     
      private static volatile Console cons = null;
-     ```
+     
 
 ### 系统属性，以下属性保证会被定义：
 
@@ -81,28 +81,28 @@ tags: [java,source]
      >
      > user.dir  用户当前目录
     
-     ```
+     
      private static Properties props;
-     ```
+     
 
 ### 换行符
 
-     ```
+     
      private static String lineSeparator;
-     ```
+     
 
 ## methods
 
 ### 私有构造函数，保证不会被实例化。
 
-     ```
+     
          private System() {
          }
-     ```
+     
 
 ### 由于java是支持多线程的，所以标准的输入输出是共享，因此它们必须受到特别的处理，在系统初始化完成之前，线程严禁使用这几个特殊对象；又因为这些对象都是静态的，因此java的类加载机制会在System类加载的时候就会初始化，这就造成了一对矛盾；为解决这对矛盾，System在加载是将它们初始化为null，等加在完成后，通过native方法在对它们进行赋值
 
-     ```
+     
      public static void setIn(InputStream in) {
          checkIO();
          setIn0(in);
@@ -129,11 +129,11 @@ tags: [java,source]
      public static SecurityManager getSecurityManager() {
      		return security;
      }
-     ```
+     
 
 ### 返回一个当前JVM联结的唯一的控制台。
 
-     ```
+     
      public static Console console() {
          if (cons == null) {
              synchronized (System.class) {
@@ -142,19 +142,19 @@ tags: [java,source]
          }
          return cons;
      }
-     ```
+     
 
 ### 返回继承于当前JVM创建的实体的通道。
 
-     ```
+     
      public static Channel inheritedChannel() throws IOException {
          return SelectorProvider.provider().inheritedChannel();
      }
-     ```
+     
 
 ### 如果已经部署了一个安全管理器，这个方法会用`RuntimePermission("setSecurityManager")`来调用这个安全管理器的`checkPermission`方法，来确定是否可以替换这个安全管理器。如果没有，则部署，如果参数为`null`，方法就不会进行操作并返回。
 
-     ```
+     
      public static
      void setSecurityManager(final SecurityManager s) {
          try {
@@ -190,38 +190,38 @@ tags: [java,source]
     
          security = s;
      }
-     ```
+     
 
 ### native方法，返回毫秒
 
-     ```
+     
      public static native long currentTimeMillis();
-     ```
+     
 
 ### native方法，返回纳秒
 
-     ```
+     
      public static native long nanoTime();
-     ```
+     
 
 ### 拷贝数组，Arrays.copyOf方法就是调用了这个方法。
 
-     ```
+     
      //src 原数组，srcPos原数组起始位，desc目标数组，destPost目标数组起始位，length复制长度
      public static native void arraycopy(Object src,  int  srcPos,
                                          Object dest, int destPos,
                                          int length);
-     ```
+     
 
 ### 返回object的hash值，与object自身的hashCode()产生的hash值相等。
 
-     ```
+     
      public static native int identityHashCode(Object x);
-     ```
+     
 
 ### property相关方法。
 
-     ```
+     
      private static native Properties initProperties(Properties props);
      public static Properties getProperties() {
              SecurityManager sm = getSecurityManager();
@@ -293,11 +293,11 @@ tags: [java,source]
          	throw new IllegalArgumentException("key can't be empty");
          }
      }
-     ```
+     
 
 ### 获取环境变量
 
-     ```
+     
      public static String getenv(String name) {
          SecurityManager sm = getSecurityManager();
          if (sm != null) {
@@ -313,59 +313,59 @@ tags: [java,source]
      	}
      	return ProcessEnvironment.getenv();
      }
-     ```
+     
 
 ### 终止当前JVM  。非0`status`表示非正常终止。
 
-     ```
+     
      public static void exit(int status) {
          Runtime.getRuntime().exit(status);
      }
-     ```
+     
 
 ### 执行垃圾回收。
 
-     ```
+     
      public static void gc() {
          Runtime.getRuntime().gc();
      }
-     ```
+     
 
 ### 执行Finalization方法
 
-     ```
+     
      public static void runFinalization() {
          Runtime.getRuntime().runFinalization();
      }
-     ```
+     
 
 ### 通过文件名加载native library。文件名中的路径必须为绝对路径。
 
-     ```
+     
      @CallerSensitive
      public static void load(String filename) {
          Runtime.getRuntime().load0(Reflection.getCallerClass(), filename);
      }
-     ```
+     
 
 ### 通过`libname`加载native library.
 
-     ```
+     
      @CallerSensitive
      public static void loadLibrary(String libname) {
          Runtime.getRuntime().loadLibrary0(Reflection.getCallerClass(), libname);
      }
-     ```
+     
 
 ### 以字符串类型返回`libname`映射的本地库文件
 
-     ```
+     
      public static native String mapLibraryName(String libname);
-     ```
+     
 
 ### 在当前编码下，创建一个标准输出或标准错误的`PrintStream`
 
-     ```
+     
      private static PrintStream newPrintStream(FileOutputStream fos, String enc) {
         if (enc != null) {
              try {
@@ -374,11 +374,11 @@ tags: [java,source]
          }
          return new PrintStream(new BufferedOutputStream(fos, 128), true);
      }
-     ```
+     
 
 ### 初始化系统类，在线程初始化完成以后调用。
 
-     ```
+     
      private static void initializeSystemClass() {
      	//VM可能会在"props"初始化的过程中调用JNU_NewStringPlatform()方法
      	//来设置与编码有关的属性(user.home, user.name, boot.class.path, etc.)
@@ -424,11 +424,11 @@ tags: [java,source]
          //重要：保证这个方法在初始化动作的最后再调用
          sun.misc.VM.booted();
      }
-     ```
+     
 
 ### //
 
-     ```
+     
      private static void setJavaLangAccess() {
          //允许java.lang之外经过授权的类
          sun.misc.SharedSecrets.setJavaLangAccess(new sun.misc.JavaLangAccess(){
@@ -480,4 +480,4 @@ tags: [java,source]
              }
          });
      }
-     ```
+     
