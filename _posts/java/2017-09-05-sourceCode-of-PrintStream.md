@@ -381,3 +381,23 @@ private void newLine() {
     }
     
     
+### 换行输出
+
+```
+public void println() {
+    newLine();
+}
+```
+
+### 换行输出实例，其他实例类似
+
+```
+public void println(Object x) {
+    String s = String.valueOf(x);
+    synchronized (this) {
+        print(s);
+        newLine();
+    }
+}
+```
+
