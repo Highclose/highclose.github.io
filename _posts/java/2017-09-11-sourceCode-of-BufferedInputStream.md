@@ -164,7 +164,7 @@ public synchronized int read() throws IOException {
         if (pos >= count)
             return -1;
     }
-    //0xff作用：读取低8位
+    //0xff作用：将前24位置0
     return getBufIfOpen()[pos++] & 0xff;
 }
 ```
