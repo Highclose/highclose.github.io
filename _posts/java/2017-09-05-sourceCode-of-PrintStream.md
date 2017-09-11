@@ -379,8 +379,8 @@ private void newLine() {
     public void print(Object obj) {
     	write(String.valueOf(obj));
     }
-    
-    
+
+
 ### 换行输出
 
 ```
@@ -398,6 +398,76 @@ public void println(Object x) {
         print(s);
         newLine();
     }
+}
+```
+
+### 格式化输出
+
+```
+public PrintStream printf(String format, Object ... args) {
+    return format(format, args);
+}	
+public PrintStream printf(Locale l, String format, Object ... args) {
+	return format(l, format, args);
+}
+```
+
+### 格式化输出（与printf等价）
+
+```
+public PrintStream format(String format, Object ... args) {
+    try {
+        synchronized (this) {
+            ensureOpen();
+            if ((formatter == null)
+                || (formatter.locale() != Locale.getDefault()))
+                formatter = new Formatter((Appendable) this);
+            formatter.format(Locale.getDefault(), format, args);
+        }
+    } catch (InterruptedIOException x) {
+        Thread.currentThread().interrupt();
+    } catch (IOException x) {
+        trouble = true;
+    }
+    return this;
+}
+
+public PrintStream format(Locale l, String format, Object ... args) {
+        try {
+            synchronized (this) {
+                ensureOpen();
+                if ((formatter == null)
+                    || (formatter.locale() != l))
+                    formatter = new Formatter(this, l);
+                formatter.format(l, format, args);
+            }
+        } catch (InterruptedIOException x) {
+            Thread.currentThread().interrupt();
+        } catch (IOException x) {
+            trouble = true;
+        }
+        return this;
+    }
+```
+
+### 向当前输出流追加指定字符序列
+
+```
+public PrintStream append(CharSequence csq) {
+    if (csq == null)
+        print("null");
+    else
+        print(csq.toString());
+    return this;
+}
+public PrintStream append(CharSequence csq, int start, int end) {
+  CharSequence cs = (csq == null ? "null" : csq);
+  write(cs.subSequence(start, end).toString());
+  return this;
+}
+public PrintStream append(char c) {
+  print(c);
+  return this;
 }
 ```
 
