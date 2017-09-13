@@ -562,19 +562,19 @@ private long transferToTrustedChannel(long position, long count,
     if (!((target instanceof FileChannelImpl) || isSelChImpl))
         return IOStatus.UNSUPPORTED;
 
-    // Trusted target: Use a mapped buffer
+    //信任目标：用一个映射的缓存
     long remaining = count;
     while (remaining > 0L) {
         long size = Math.min(remaining, MAPPED_TRANSFER_SIZE);
         try {
             MappedByteBuffer dbb = map(MapMode.READ_ONLY, position, size);
             try {
-                // ## Bug: Closing this channel will not terminate the write
+                //Bug：关闭通道不能终止写入动作
                 int n = target.write(dbb);
                 assert n >= 0;
                 remaining -= n;
                 if (isSelChImpl) {
-                    // one attempt to write to selectable channel
+                    //试图写入到SelectableChannel
                     break;
                 }
                 assert n > 0;
@@ -583,8 +583,7 @@ private long transferToTrustedChannel(long position, long count,
                 unmap(dbb);
             }
         } catch (ClosedByInterruptException e) {
-            // target closed by interrupt as ClosedByInterruptException needs
-            // to be thrown after closing this channel.
+            //目标被中断则在关闭本通道后需要再抛出异常
             assert !target.isOpen();
             try {
                 close();
@@ -593,7 +592,7 @@ private long transferToTrustedChannel(long position, long count,
             }
             throw e;
         } catch (IOException ioe) {
-            // Only throw exception if no bytes have been written
+            //只有在没有字节被写入时才抛出
             if (remaining == count)
                 throw ioe;
             break;
@@ -602,3 +601,286 @@ private long transferToTrustedChannel(long position, long count,
     return count - remaining;
 }
 ```
+### 传输到任意的通道	
+
+```
+private long transferToArbitraryChannel(long position, int icount,
+                                        WritableByteChannel target)
+        throws IOException
+{
+    //不信任的通道 ：使用一个临时的通道 
+    int c = Math.min(icount, TRANSFER_SIZE);
+    ByteBuffer bb = Util.getTemporaryDirectBuffer(c);
+    long tw = 0;                    // 写入的字节总数
+    long pos = position;
+    try {
+        Util.erase(bb);
+        while (tw < icount) {
+            bb.limit(Math.min((int)(icount - tw), TRANSFER_SIZE));
+            int nr = read(bb, pos);
+            if (nr <= 0)
+                break;
+            bb.flip();
+            //Bug：如果通道被异步关闭，写入的通道会阻塞
+            int nw = target.write(bb);
+            tw += nw;
+            if (nw != nr)
+                break;
+            pos += nw;
+            bb.clear();
+        }
+        return tw;
+    } catch (IOException x) {
+        if (tw > 0)
+            return tw;
+        throw x;
+    } finally {
+        Util.releaseTemporaryDirectBuffer(bb);
+    }
+}
+```
+
+### 从本通道的文件传输字节到目标通道。会试图读取通道中从当前位置开始的总字节数并将他们写入目标通道 。本方法可能不会传输所有需求的字节，取决于类型或通道的状态。比需求字节更少可能因为通道中文件从当前位置开始字节数不足，或可以因为目标通道是非阻塞的且它的输出缓存上空闲资源不足。本方法不会修改文件位置 ，如果指定的位置文件当前长度，则不会传输字节。许多操作系统会直接从文件系统缓存中传输字节去目标通道而不是复制。
+
+```
+public long transferTo(long position, long count,
+                       WritableByteChannel target)
+        throws IOException
+{
+    ensureOpen();
+    if (!target.isOpen())//目标关闭
+        throw new ClosedChannelException();
+    if (!readable)
+        throw new NonReadableChannelException();
+    if (target instanceof FileChannelImpl &&
+            !((FileChannelImpl)target).writable)
+        throw new NonWritableChannelException();//目标不可写
+    if ((position < 0) || (count < 0))
+        throw new IllegalArgumentException();
+    long sz = size();
+    if (position > sz)
+        return 0;
+    int icount = (int)Math.min(count, Integer.MAX_VALUE);
+    if ((sz - position) < icount)
+        icount = (int)(sz - position);
+
+    long n;
+
+    //如果内核支持，试图直接传输
+    if ((n = transferToDirectly(position, icount, target)) >= 0)
+        return n;
+
+    //试图用映射传输去信任通道类型
+    if ((n = transferToTrustedChannel(position, icount, target)) >= 0)
+        return n;
+
+    // 低速的不信任目标 
+    return transferToArbitraryChannel(position, icount, target);
+}
+```
+
+### 传输自文件通道
+
+```
+private long transferFromFileChannel(FileChannelImpl src,
+                                     long position, long count)
+        throws IOException
+{
+    if (!src.readable)
+        throw new NonReadableChannelException();
+    synchronized (src.positionLock) {
+        long pos = src.position();
+        long max = Math.min(count, src.size() - pos);
+
+        long remaining = max;
+        long p = pos;
+        while (remaining > 0L) {
+            long size = Math.min(remaining, MAPPED_TRANSFER_SIZE);
+            //Bug：关闭通道不会终止写入
+            MappedByteBuffer bb = src.map(MapMode.READ_ONLY, p, size);
+            try {
+                long n = write(bb, position);
+                assert n > 0;
+                p += n;
+                position += n;
+                remaining -= n;
+            } catch (IOException ioe) {
+                //只有在没有字节写入的情况下会抛出异常
+                if (remaining == max)
+                    throw ioe;
+                break;
+            } finally {
+                unmap(bb);
+            }
+        }
+        long nwritten = max - remaining;
+        src.position(pos + nwritten);
+        return nwritten;
+    }
+}
+```
+
+### 传输自任意通道
+
+```
+private long transferFromArbitraryChannel(ReadableByteChannel src,
+                                          long position, long count)
+        throws IOException
+{
+    //不信任的通道：使用一个临时的缓存
+    int c = (int)Math.min(count, TRANSFER_SIZE);
+    ByteBuffer bb = Util.getTemporaryDirectBuffer(c);
+    long tw = 0;                    // 写入总字节
+    long pos = position;
+    try {
+        Util.erase(bb);
+        while (tw < count) {
+            bb.limit((int)Math.min((count - tw), (long)TRANSFER_SIZE));
+            //Bug: 如果本通道被异步关闭会导致源通道会阻塞
+            int nr = src.read(bb);
+            if (nr <= 0)
+                break;
+            bb.flip();
+            int nw = write(bb, pos);
+            tw += nw;
+            if (nw != nr)
+                break;
+            pos += nw;
+            bb.clear();
+        }
+        return tw;
+    } catch (IOException x) {
+        if (tw > 0)
+            return tw;
+        throw x;
+    } finally {
+        Util.releaseTemporaryDirectBuffer(bb);
+    }
+}
+```
+
+### 传输自通道。 
+
+```
+public long transferFrom(ReadableByteChannel src,
+                         long position, long count)
+        throws IOException
+{
+    ensureOpen();
+    if (!src.isOpen())
+        throw new ClosedChannelException();
+    if (!writable)
+        throw new NonWritableChannelException();
+    if ((position < 0) || (count < 0))
+        throw new IllegalArgumentException();
+    if (position > size())
+        return 0;
+    if (src instanceof FileChannelImpl)
+        return transferFromFileChannel((FileChannelImpl)src,
+                position, count);
+
+    return transferFromArbitraryChannel(src, position, count);
+}
+```
+
+### 从通道中文件的指定起始位置开始读取字节到缓存中，本方法与`read(ByteBuffer)`方法一致，除了字节从指定位置开始而不是当前位置。
+
+```
+public int read(ByteBuffer dst, long position) throws IOException {
+    if (dst == null)
+        throw new NullPointerException();
+    if (position < 0)
+        throw new IllegalArgumentException("Negative position");
+    if (!readable)
+        throw new NonReadableChannelException();
+    ensureOpen();
+    if (nd.needsPositionLock()) {
+        synchronized (positionLock) {
+            return readInternal(dst, position);
+        }
+    } else {
+        return readInternal(dst, position);
+    }
+}
+```
+
+### 读取方法
+
+```
+private int readInternal(ByteBuffer dst, long position) throws IOException {
+    assert !nd.needsPositionLock() || Thread.holdsLock(positionLock);
+    int n = 0;
+    int ti = -1;
+    try {
+        begin();
+        ti = threads.add();
+        if (!isOpen())
+            return -1;
+        do {
+            n = IOUtil.read(fd, dst, position, nd);
+        } while ((n == IOStatus.INTERRUPTED) && isOpen());
+        return IOStatus.normalize(n);
+    } finally {
+        threads.remove(ti);
+        end(n > 0);
+        assert IOStatus.check(n);
+    }
+}
+```
+
+### 通道中的文件从指定位置开始写传入的缓存
+
+```
+public int write(ByteBuffer src, long position) throws IOException {
+    if (src == null)
+        throw new NullPointerException();
+    if (position < 0)
+        throw new IllegalArgumentException("Negative position");
+    if (!writable)
+        throw new NonWritableChannelException();
+    ensureOpen();
+    if (nd.needsPositionLock()) {
+        synchronized (positionLock) {
+            return writeInternal(src, position);
+        }
+    } else {
+        return writeInternal(src, position);
+    }
+}
+```
+
+### 写入方法
+
+```
+private int writeInternal(ByteBuffer src, long position) throws IOException {
+    assert !nd.needsPositionLock() || Thread.holdsLock(positionLock);
+    int n = 0;
+    int ti = -1;
+    try {
+        begin();
+        ti = threads.add();
+        if (!isOpen())
+            return -1;
+        do {
+            n = IOUtil.write(fd, src, position, nd);
+        } while ((n == IOStatus.INTERRUPTED) && isOpen());
+        return IOStatus.normalize(n);
+    } finally {
+        threads.remove(ti);
+        end(n > 0);
+        assert IOStatus.check(n);
+    }
+}
+```
+
+### 释放映射缓存
+
+```
+private static void unmap(MappedByteBuffer bb) {
+    Cleaner cl = ((DirectBuffer)bb).cleaner();
+    if (cl != null)
+        cl.clean();
+}
+```
+
+### 将通道中的文件域映射到内存中
