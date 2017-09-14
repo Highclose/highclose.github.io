@@ -883,4 +883,456 @@ private static void unmap(MappedByteBuffer bb) {
 }
 ```
 
-### 将通道中的文件域映射到内存中
+### 将通道中的文件域映射到内存中。
+
+映射有三种模式：
+
+* `Read-only`：试图修改结果缓存会抛出异常
+* `Read/write`：对结果缓存做的修改最后都会被更新到文件中，对其他映射同个文件的程序不一定是可见的
+* `Private`：对结果缓存做的修改最后不会被更新到文件中，对其他映射同个文件的程序也不可见的，而是会对缓存修改的部分进行私有化的拷贝。
+
+缓存和映射直到垃圾回收之前都会是有效的。映射一旦创建，就和通道相互独立，关闭通道不会使映射失效。
+
+对大多数操作系统而言，映射文件到内存比起使用常用的`read` `write`方法处理几十KB的文件来说是非常昂贵的。所以，为了最优的性能，只有在处理特别大的文件的时候才值得
+
+```
+public MappedByteBuffer map(MapMode mode, long position, long size)
+        throws IOException
+{
+    ensureOpen();
+    if (mode == null)
+        throw new NullPointerException("Mode is null");
+    if (position < 0L)
+        throw new IllegalArgumentException("Negative position");
+    if (size < 0L)
+        throw new IllegalArgumentException("Negative size");
+    if (position + size < 0)
+        throw new IllegalArgumentException("Position + size overflow");
+    if (size > Integer.MAX_VALUE)
+        throw new IllegalArgumentException("Size exceeds Integer.MAX_VALUE");
+
+    int imode = -1;
+    if (mode == MapMode.READ_ONLY)
+        imode = MAP_RO;
+    else if (mode == MapMode.READ_WRITE)
+        imode = MAP_RW;
+    else if (mode == MapMode.PRIVATE)
+        imode = MAP_PV;
+    assert (imode >= 0);
+    if ((mode != MapMode.READ_ONLY) && !writable)
+        throw new NonWritableChannelException();
+    if (!readable)
+        throw new NonReadableChannelException();
+
+    long addr = -1;
+    int ti = -1;
+    try {
+        begin();
+        ti = threads.add();
+        if (!isOpen())
+            return null;
+
+        long filesize;
+        do {
+            filesize = nd.size(fd);
+        } while ((filesize == IOStatus.INTERRUPTED) && isOpen());
+        if (!isOpen())
+            return null;
+
+        if (filesize < position + size) { // 扩展文件大小
+            if (!writable) {
+                throw new IOException("Channel not open for writing " +
+                        "- cannot extend file to required size");
+            }
+            int rv;
+            do {
+                rv = nd.truncate(fd, position + size);//截取文件大小
+            } while ((rv == IOStatus.INTERRUPTED) && isOpen());
+            if (!isOpen())
+                return null;
+        }
+        if (size == 0) {
+            addr = 0;
+            //一个有效的文件描述符不是必须的
+            FileDescriptor dummy = new FileDescriptor();
+            if ((!writable) || (imode == MAP_RO))
+                return Util.newMappedByteBufferR(0, 0, dummy, null);
+            else
+                return Util.newMappedByteBuffer(0, 0, dummy, null);
+        }
+
+        int pagePosition = (int)(position % allocationGranularity);
+        long mapPosition = position - pagePosition;
+        long mapSize = size + pagePosition;
+        try {
+            //如果map0没有抛出异常，则地址是有效的
+            addr = map0(imode, mapPosition, mapSize);
+        } catch (OutOfMemoryError x) {
+            //如果OutOfMemoryError抛出表示已经耗尽内存，则强制垃圾回收并重新映射
+            System.gc();
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException y) {
+                Thread.currentThread().interrupt();
+            }
+            try {
+                addr = map0(imode, mapPosition, mapSize);
+            } catch (OutOfMemoryError y) {
+                //第二次也失败
+                throw new IOException("Map failed", y);
+            }
+        }
+
+        //在windows，或可能的其他平台，我们一个打开的文件描述符来执行某些映射操作
+        FileDescriptor mfd;
+        try {
+            mfd = nd.duplicateForMapping(fd);
+        } catch (IOException ioe) {
+            unmap0(addr, mapSize);
+            throw ioe;
+        }
+
+        assert (IOStatus.checkAll(addr));
+        assert (addr % allocationGranularity == 0);
+        int isize = (int)size;
+        Unmapper um = new Unmapper(addr, mapSize, isize, mfd);
+        if ((!writable) || (imode == MAP_RO)) {
+            return Util.newMappedByteBufferR(isize,
+                    addr + pagePosition,
+                    mfd,
+                    um);
+        } else {
+            return Util.newMappedByteBuffer(isize,
+                    addr + pagePosition,
+                    mfd,
+                    um);
+        }
+    } finally {
+        threads.remove(ti);
+        end(IOStatus.checkAll(addr));
+    }
+}
+```
+
+### 被`sun.management.ManagementFactoryHelper`调用给映射缓存创建一个管理接口
+
+```
+public static sun.misc.JavaNioAccess.BufferPool getMappedBufferPool() {
+    return new sun.misc.JavaNioAccess.BufferPool() {
+        @Override
+        public String getName() {
+            return "mapped";
+        }
+        @Override
+        public long getCount() {
+            return Unmapper.count;
+        }
+        @Override
+        public long getTotalCapacity() {
+            return Unmapper.totalCapacity;
+        }
+        @Override
+        public long getMemoryUsed() {
+            return Unmapper.totalSize;
+        }
+    };
+}
+```
+
+### 保存在每个`FileChannel`实例本地的锁序列（J2SE 1.4/5.0中），当同个文件上有多少通道，重叠检测不是系统级的。
+
+```
+private static boolean isSharedFileLockTable() {
+    if (!propertyChecked) {
+        synchronized (FileChannelImpl.class) {
+            if (!propertyChecked) {
+                String value = AccessController.doPrivileged(
+                        new GetPropertyAction(
+                                "sun.nio.ch.disableSystemWideOverlappingFileLockCheck"));
+                isSharedFileLockTable = ((value == null) || value.equals("false"));
+                propertyChecked = true;
+            }
+        }
+    }
+    return isSharedFileLockTable;
+}
+```
+
+### 跟踪文件锁
+
+```
+private FileLockTable fileLockTable() throws IOException {
+    if (fileLockTable == null) {
+        synchronized (this) {
+            if (fileLockTable == null) {
+                if (isSharedFileLockTable()) {
+                    int ti = threads.add();
+                    try {
+                        ensureOpen();
+                        fileLockTable = FileLockTable.newSharedFileLockTable(this, fd);
+                    } finally {
+                        threads.remove(ti);
+                    }
+                } else {
+                    fileLockTable = new SimpleFileLockTable();
+                }
+            }
+        }
+    }
+    return fileLockTable;
+}
+```
+
+### 获取文件上的锁。调用该方法会阻塞直到文件可以重新上锁或本通道关闭或调用文件的线程被中断。当本通道调用该方法时被中断会抛出`AsynchronousCloseException`，当调用的线程在等待获取锁的时候被中断了，则会设置该线程的中断状态并用抛出一个`FileLockInterruptionException`,当方法调用时调用者的中断状态会被设置，异常立即抛出，线程的中断状态不会改变。加锁的部分由`position` `size`指定，但不是必须在真实文件中。如果当加锁区域由文件的末尾初始化然后文件扩展到该区域之外 ，则文件新增部分不会被锁覆盖。如果预期文件会扩展而且需要一个全文件的锁，则区域需要从0开始到预期的最大数量 。`Lock()`方法就是简单的锁了从0开始到`Long.MAX_VALUE`。有些操作系统不支持共享锁，则获取共享锁会被自动转换成获取排他锁，新获取的锁是共享的还是排他的可以用`FileLock.isShared()`方法来获取。
+
+```
+public FileLock lock(long position, long size, boolean shared)
+        throws IOException
+{
+    ensureOpen();
+    if (shared && !readable)
+        throw new NonReadableChannelException();
+    if (!shared && !writable)
+        throw new NonWritableChannelException();
+    FileLockImpl fli = new FileLockImpl(this, position, size, shared);
+    FileLockTable flt = fileLockTable();
+    flt.add(fli);
+    boolean completed = false;
+    int ti = -1;
+    try {
+        begin();
+        ti = threads.add();
+        if (!isOpen())
+            return null;
+        int n;
+        do {
+            n = nd.lock(fd, true, position, size, shared);
+        } while ((n == FileDispatcher.INTERRUPTED) && isOpen());
+        if (isOpen()) {
+            if (n == FileDispatcher.RET_EX_LOCK) {
+                assert shared;
+                FileLockImpl fli2 = new FileLockImpl(this, position, size,
+                        false);
+                flt.replace(fli, fli2);
+                fli = fli2;
+            }
+            completed = true;
+        }
+    } finally {
+        if (!completed)
+            flt.remove(fli);
+        threads.remove(ti);
+        try {
+            end(completed);
+        } catch (ClosedByInterruptException e) {
+            throw new FileLockInterruptionException();
+        }
+    }
+    return fli;
+}
+```
+
+### 试图获取一个锁，该方法不会阻塞。调用都会立即返回，或是获得锁或是失败。当因为做重叠检测的时候发现锁被别的程序持有，返回`null`，其他原因则会抛出异常。
+
+```
+public FileLock tryLock(long position, long size, boolean shared)
+        throws IOException
+{
+    ensureOpen();
+    if (shared && !readable)
+        throw new NonReadableChannelException();
+    if (!shared && !writable)
+        throw new NonWritableChannelException();
+    FileLockImpl fli = new FileLockImpl(this, position, size, shared);
+    FileLockTable flt = fileLockTable();
+    flt.add(fli);
+    int result;
+
+    int ti = threads.add();
+    try {
+        try {
+            ensureOpen();
+            result = nd.lock(fd, false, position, size, shared);
+        } catch (IOException e) {
+            flt.remove(fli);
+            throw e;
+        }
+        if (result == FileDispatcher.NO_LOCK) {
+            flt.remove(fli);
+            return null;
+        }
+        if (result == FileDispatcher.RET_EX_LOCK) {
+            assert shared;
+            FileLockImpl fli2 = new FileLockImpl(this, position, size,
+                    false);
+            flt.replace(fli, fli2);
+            return fli2;
+        }
+        return fli;
+    } finally {
+        threads.remove(ti);
+    }
+}
+```
+
+### 释放锁
+
+```
+void release(FileLockImpl fli) throws IOException {
+    int ti = threads.add();
+    try {
+        ensureOpen();
+        nd.release(fd, fli.position(), fli.size());
+    } finally {
+        threads.remove(ti);
+    }
+    assert fileLockTable != null;
+    fileLockTable.remove(fli);
+}
+```
+
+### 创建映射
+
+```
+private native long map0(int prot, long position, long length)
+        throws IOException;
+```
+
+### 移除已存在的映射
+
+```
+private static native int unmap0(long address, long length);
+```
+
+### 从源传输到目的地，如果内核不支持会返回`-2`
+
+```
+private native long transferTo0(int src, long position, long count, int dst);
+```
+
+### 获取或设置位置，如果`offset=-1`，返回当前位置，否则设置到该位置
+
+```
+private native long position0(FileDescriptor fd, long offset);
+```
+
+### 缓存`fieldIDs`
+
+```
+private static native long initIDs();
+
+static {
+    IOUtil.load();
+    allocationGranularity = initIDs();
+}
+```
+
+### 内部类，一个简单的文件锁表维护文件通道获取的文件锁列表。
+
+```
+private static class SimpleFileLockTable extends FileLockTable {
+    //供获取的同步list
+    private final List<FileLock> lockList = new ArrayList<FileLock>(2);
+
+    public SimpleFileLockTable() {
+    }
+
+    private void checkList(long position, long size)
+            throws OverlappingFileLockException
+    {
+        assert Thread.holdsLock(lockList);
+        for (FileLock fl: lockList) {
+            if (fl.overlaps(position, size)) {
+                throw new OverlappingFileLockException();
+            }
+        }
+    }
+
+    public void add(FileLock fl) throws OverlappingFileLockException {
+        synchronized (lockList) {
+            checkList(fl.position(), fl.size());
+            lockList.add(fl);
+        }
+    }
+
+    public void remove(FileLock fl) {
+        synchronized (lockList) {
+            lockList.remove(fl);
+        }
+    }
+
+    public List<FileLock> removeAll() {
+        synchronized(lockList) {
+            List<FileLock> result = new ArrayList<FileLock>(lockList);
+            lockList.clear();
+            return result;
+        }
+    }
+
+    public void replace(FileLock fl1, FileLock fl2) {
+        synchronized (lockList) {
+            lockList.remove(fl1);
+            lockList.add(fl2);
+        }
+    }
+}
+```
+
+### 内部类，内存映射缓存 
+
+```
+private static class Unmapper
+        implements Runnable
+{
+    //可能获取用来关闭文件
+    private static final NativeDispatcher nd = new FileDispatcherImpl();
+
+    //跟踪映射缓存使用量
+    static volatile int count;
+    static volatile long totalSize;
+    static volatile long totalCapacity;
+
+    private volatile long address;
+    private final long size;
+    private final int cap;
+    private final FileDescriptor fd;
+
+    private Unmapper(long address, long size, int cap,
+                     FileDescriptor fd)
+    {
+        assert (address != 0);
+        this.address = address;
+        this.size = size;
+        this.cap = cap;
+        this.fd = fd;
+
+        synchronized (Unmapper.class) {
+            count++;
+            totalSize += size;
+            totalCapacity += cap;
+        }
+    }
+
+    public void run() {
+        if (address == 0)
+            return;
+        unmap0(address, size);
+        address = 0;
+
+        // if this mapping has a valid file descriptor then we close it
+        if (fd.valid()) {
+            try {
+                nd.close(fd);
+            } catch (IOException ignore) {
+                // nothing we can do
+            }
+        }
+
+        synchronized (Unmapper.class) {
+            count--;
+            totalSize -= size;
+            totalCapacity -= cap;
+        }
+    }
+}
+```
