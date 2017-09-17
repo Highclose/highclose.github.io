@@ -7,8 +7,6 @@ description: "Analyze source code of HeapByteBuffer."
 tags: [java,source]
 ---
 
-## 与饥饿
-
 ## implements
 
 ```
