@@ -17,7 +17,7 @@ tags: [java,source]
 
 本类是一个抽象类，所有子类都定义了两类方法`put` `get`:
 
-相应的方法在当前益读或写一个或多个元素并且根据元素数量增加位置。当要求传输的数量超过限制，则相对应 的`get`方法抛出`BufferUnderflowException`，`put`抛出`BufferOverflowException`，两种情况，都不会有数据传输。绝对的操作会直接使用索引而不会修改位置。绝对的`put` `get`方法使用的索引超过限制时会抛出`IndexOutOfBoundsException`
+相应的方法在当前位置读或写一个或多个元素并且根据元素数量增加位置。当要求传输的数量超过限制，则相对应 的`get`方法抛出`BufferUnderflowException`，`put`抛出`BufferOverflowException`，两种情况，都不会有数据传输。绝对的操作会直接使用索引而不会修改位置。绝对的`put` `get`方法使用的索引超过限制时会抛出`IndexOutOfBoundsException`
 
 数据也会因为通道的IO操作传入传出缓存，该动作跟当前位置有关。
 
@@ -160,7 +160,7 @@ public final Buffer flip() {
 }
 ```
 
-### 绕回缓存 ，在通道写入或`get`方法之前调用该方法，如果`limit`适合需求。
+### 绕回缓存 ，在通道写入或`get`方法之前调用该方法。重读已经翻转的缓冲区的数据。
 
 ```
 public final Buffer rewind() {
