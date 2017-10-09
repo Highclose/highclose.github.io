@@ -1557,13 +1557,8 @@ private static byte decode(char c1, char c2) {
                   | ((decode(c2) & 0xf) << 0));
 }
 
-// Evaluates all escapes in s, applying UTF-8 decoding if needed.  Assumes
-// that escapes are well-formed syntactically, i.e., of the form %XX.  If a
-// sequence of escaped octets is not valid UTF-8 then the erroneous octets
-// are replaced with '\uFFFD'.
-// Exception: any "%" found between "[]" is left alone. It is an IPv6 literal
-//            with a scope_id
-//
+//评估字符串s的转义符号，如果需要用UTF-8解码。默认转义符号有良好的格式，比如%XX形式，如果已给转义序列不是有效的UTF-8码，则错误的序列被\uFFFD取代
+//异常：所以[]中最后剩下一个的的%。它是IPV6里用作scope_id的
 //
 private static String decode(String s) {
     if (s == null)
@@ -1581,12 +1576,12 @@ private static String decode(String s) {
         .onMalformedInput(CodingErrorAction.REPLACE)
         .onUnmappableCharacter(CodingErrorAction.REPLACE);
 
-    // This is not horribly efficient, but it will do for now
+    // 这个方法不是特别的有效，但是可以用
     char c = s.charAt(0);
     boolean betweenBrackets = false;
 
     for (int i = 0; i < n;) {
-        assert c == s.charAt(i);    // Loop invariant
+        assert c == s.charAt(i);   
         if (c == '[') {
             betweenBrackets = true;
         } else if (betweenBrackets && c == ']') {
@@ -1624,15 +1619,13 @@ private static String decode(String s) {
 }
 
 
-// -- Parsing --
+// -- 解析 --
 
-// For convenience we wrap the input URI string in a new instance of the
-// following internal class.  This saves always having to pass the input
-// string as an argument to each internal scan/parse method.
+//为了方便使用，我们爆过了输入URI字符串在一个新的内部类实例中。 使输入字符串作为一个参数传给每个内部的扫描/解析方法
 
 private class Parser {
 
-    private String input;           // URI input string
+    private String input;           // URI输入字符串
     private boolean requireServerAuthority = false;
 
     Parser(String s) {
@@ -1640,7 +1633,7 @@ private class Parser {
         string = s;
     }
 
-    // -- Methods for throwing URISyntaxException in various ways --
+	//用作抛出各种异常的方法。
 
     private void fail(String reason) throws URISyntaxException {
         throw new URISyntaxException(input, reason);
@@ -1663,29 +1656,25 @@ private class Parser {
     }
 
 
-    // -- Simple access to the input string --
+    // -- 获取输入字符串 --
 
-    // Return a substring of the input string
+    // 返回子字符串
     //
     private String substring(int start, int end) {
         return input.substring(start, end);
     }
 
-    // Return the char at position p,
-    // assuming that p < input.length()
+    // 返回p位置的字符
     //
     private char charAt(int p) {
         return input.charAt(p);
     }
 
-    // Tells whether start < end and, if so, whether charAt(start) == c
-    //
     private boolean at(int start, int end, char c) {
         return (start < end) && (charAt(start) == c);
     }
 
-    // Tells whether start + s.length() < end and, if so,
-    // whether the chars at the start position match s exactly
+    // 从start位置开始的字符与字符串s相同
     //
     private boolean at(int start, int end, String s) {
         int p = start;
@@ -1703,48 +1692,31 @@ private class Parser {
     }
 
 
-    // -- Scanning --
+    // -- 扫描 --
 
-    // The various scan and parse methods that follow use a uniform
-    // convention of taking the current start position and end index as
-    // their first two arguments.  The start is inclusive while the end is
-    // exclusive, just as in the String class, i.e., a start/end pair
-    // denotes the left-open interval [start, end) of the input string.
-    //
-    // These methods never proceed past the end position.  They may return
-    // -1 to indicate outright failure, but more often they simply return
-    // the position of the first char after the last char scanned.  Thus
-    // a typical idiom is
-    //
+	// 后面各种扫描及解析方法都用了同一个规则，起始位置与终止位置的索引作为头两个参数。[start,end)
+    // 这些方法不会越过终点位置。返回-1标识超出右边失败，但是经常会在最后一个字符扫描完以后返回第一个字符的位置。因此，一个典型的流程是这样的：
     //     int p = start;
     //     int q = scan(p, end, ...);
     //     if (q > p)
-    //         // We scanned something
+    //         // 找到
     //         ...;
     //     else if (q == p)
-    //         // We scanned nothing
+    //         // 没有找到
     //         ...;
     //     else if (q == -1)
-    //         // Something went wrong
+    //         // 出错
     //         ...;
 
 
-    // Scan a specific char: If the char at the given start position is
-    // equal to c, return the index of the next char; otherwise, return the
-    // start position.
-    //
+    //扫描一个指定的字符：如果在传入的起始位置即使该字符，则返回下个字符的索引，否则返回起始位
     private int scan(int start, int end, char c) {
         if ((start < end) && (charAt(start) == c))
             return start + 1;
         return start;
     }
 
-    // Scan forward from the given start position.  Stop at the first char
-    // in the err string (in which case -1 is returned), or the first char
-    // in the stop string (in which case the index of the preceding char is
-    // returned), or the end of the input string (in which case the length
-    // of the input string is returned).  May return the start position if
-    // nothing matches.
+    // 从传入的其实位置开始扫描。在err字符串的第一个字符处停止（返回-1），或者在stop字符串的第一个字符停止（当前字符的索引被返回），或者在输入字符串的末尾停止（返回字符串长度）。如果没有找到匹配，则返回起始位置。
     //
     private int scan(int start, int end, String err, String stop) {
         int p = start;
@@ -1759,12 +1731,8 @@ private class Parser {
         return p;
     }
 
-    // Scan a potential escape sequence, starting at the given position,
-    // with the given first char (i.e., charAt(start) == c).
-    //
-    // This method assumes that if escapes are allowed then visible
-    // non-US-ASCII chars are also allowed.
-    //
+    // 在传入的位置用传入的第一个字符（比如charAt(start) == c）扫描一个潜在的转义序列。
+    // 本方法假定如果允许转义则可显示的非US-ASCII字符也被允许
     private int scanEscape(int start, int n, char first)
         throws URISyntaxException
     {
@@ -1781,13 +1749,13 @@ private class Parser {
         } else if ((c > 128)
                    && !Character.isSpaceChar(c)
                    && !Character.isISOControl(c)) {
-            // Allow unescaped but visible non-US-ASCII chars
+            // 允许不是转义而是可显示的非US-ASCII字符
             return p + 1;
         }
         return p;
     }
 
-    // Scan chars that match the given mask pair
+    // 扫描匹配传入的掩码对的字符
     //
     private int scan(int start, int n, long lowMask, long highMask)
         throws URISyntaxException
@@ -1811,7 +1779,7 @@ private class Parser {
         return p;
     }
 
-    // Check that each of the chars in [start, end) matches the given mask
+    //测试每个在[start, end)中的字符是否匹配传入的掩码对
     //
     private void checkChars(int start, int end,
                             long lowMask, long highMask,
@@ -1823,7 +1791,7 @@ private class Parser {
             fail("Illegal character in " + what, p);
     }
 
-    // Check that the char at position p matches the given mask
+    //测试p位置的字符是否匹配掩码对
     //
     private void checkChar(int p,
                            long lowMask, long highMask,
@@ -1834,13 +1802,13 @@ private class Parser {
     }
 
 
-    // -- Parsing --
+    // -- 解析 --
 
-    // [<scheme>:]<scheme-specific-part>[#<fragment>]
+    // [<模式>:]<模式具体部分>[#<分区>]
     //
     void parse(boolean rsa) throws URISyntaxException {
         requireServerAuthority = rsa;
-        int ssp;                    // Start of scheme-specific part
+        int ssp;                    // 模式具体部分的开始
         int n = input.length();
         int p = scan(0, n, "/?#", ":");
         if ((p >= 0) && at(p, n, ':')) {
@@ -1849,7 +1817,7 @@ private class Parser {
             checkChar(0, L_ALPHA, H_ALPHA, "scheme name");
             checkChars(1, p, L_SCHEME, H_SCHEME, "scheme name");
             scheme = substring(0, p);
-            p++;                    // Skip ':'
+            p++;                    // 跳过 ':'
             ssp = p;
             if (at(p, n, '/')) {
                 p = parseHierarchical(p, n);
@@ -1874,19 +1842,10 @@ private class Parser {
             fail("end of URI", p);
     }
 
-    // [//authority]<path>[?<query>]
+    // [//权限]<路径>[?<查询>]
     //
-    // DEVIATION from RFC2396: We allow an empty authority component as
-    // long as it's followed by a non-empty path, query component, or
-    // fragment component.  This is so that URIs such as "file:///foo/bar"
-    // will parse.  This seems to be the intent of RFC2396, though the
-    // grammar does not permit it.  If the authority is empty then the
-    // userInfo, host, and port components are undefined.
-    //
-    // DEVIATION from RFC2396: We allow empty relative paths.  This seems
-    // to be the intent of RFC2396, but the grammar does not permit it.
-    // The primary consequence of this deviation is that "#f" parses as a
-    // relative URI with an empty path.
+    // 与RFC2396有所不同：只有在一个非空的路径，查询或分区后面允许一个空的权限组件。于是类似与"file:///foo/bar"这样的地址也会解析。
+    //同样允许空的相对路径，于是允许类似于'#f'这样的地址可以解析成空地址的相对URI
     //
     private int parseHierarchical(int start, int n)
         throws URISyntaxException
@@ -1898,12 +1857,11 @@ private class Parser {
             if (q > p) {
                 p = parseAuthority(p, q);
             } else if (q < n) {
-                // DEVIATION: Allow empty authority prior to non-empty
-                // path, query component or fragment identifier
+                // 允许空权限
             } else
                 failExpecting("authority", p);
         }
-        int q = scan(p, n, "", "?#"); // DEVIATION: May be empty
+        int q = scan(p, n, "", "?#"); // 可能为空
         checkChars(p, q, L_PATH, H_PATH, "path");
         path = substring(p, q);
         p = q;
@@ -1917,13 +1875,9 @@ private class Parser {
         return p;
     }
 
-    // authority     = server | reg_name
+    // 权限     = 服务器 | 注册名
     //
-    // Ambiguity: An authority that is a registry name rather than a server
-    // might have a prefix that parses as a server.  We use the fact that
-    // the authority component is always followed by '/' or the end of the
-    // input string to resolve this: If the complete authority did not
-    // parse as a server then we try to parse it as a registry name.
+    // 如果是注册名的话可能会有前缀被解析成服务器。使用权限组件后面总是跟着'/'或者字符串结尾来解决这个问题：如果完整的权限不能解析成服务器则尝试解析成注册名
     //
     private int parseAuthority(int start, int n)
         throws URISyntaxException
@@ -1936,7 +1890,7 @@ private class Parser {
         boolean regChars;
 
         if (scan(p, n, "", "]") > p) {
-            // contains a literal IPv6 address, therefore % is allowed
+            //包含IPV6地址，因此允许%符号
             serverChars = (scan(p, n, L_SERVER_PERCENT, H_SERVER_PERCENT) == n);
         } else {
             serverChars = (scan(p, n, L_SERVER, H_SERVER) == n);
@@ -1944,32 +1898,28 @@ private class Parser {
         regChars = (scan(p, n, L_REG_NAME, H_REG_NAME) == n);
 
         if (regChars && !serverChars) {
-            // Must be a registry-based authority
+            // 一定是一个基于注册的权限
             authority = substring(p, n);
             return n;
         }
 
         if (serverChars) {
-            // Might be (probably is) a server-based authority, so attempt
-            // to parse it as such.  If the attempt fails, try to treat it
-            // as a registry-based authority.
+            // 可能是基于服务器的，所以试着解析，如果失败，则尝试当作是基于服务器的
             try {
                 q = parseServer(p, n);
                 if (q < n)
                     failExpecting("end of authority", q);
                 authority = substring(p, n);
             } catch (URISyntaxException x) {
-                // Undo results of failed parse
+                // 回滚失败的解析
                 userInfo = null;
                 host = null;
                 port = -1;
                 if (requireServerAuthority) {
-                    // If we're insisting upon a server-based authority,
-                    // then just re-throw the exception
+                    // 如果坚持基于服务器，则重新抛出异常
                     throw x;
                 } else {
-                    // Save the exception in case it doesn't parse as a
-                    // registry either
+                    // 保存异常，万一也不能解析成基于注册的
                     ex = x;
                     q = p;
                 }
@@ -1978,11 +1928,10 @@ private class Parser {
 
         if (q < n) {
             if (regChars) {
-                // Registry-based authority
+                // 基于注册的
                 authority = substring(p, n);
             } else if (ex != null) {
-                // Re-throw exception; it was probably due to
-                // a malformed IPv6 address
+                // 重新抛出异常：可能因为是个残缺的IPV6地址
                 throw ex;
             } else {
                 fail("Illegal character in authority", q);
@@ -1993,7 +1942,7 @@ private class Parser {
     }
 
 
-    // [<userinfo>@]<host>[:<port>]
+    // [<用户信息>@]<主机>[:<端口>]
     //
     private int parseServer(int start, int n)
         throws URISyntaxException
@@ -2001,21 +1950,22 @@ private class Parser {
         int p = start;
         int q;
 
-        // userinfo
+        // 用户信息
         q = scan(p, n, "/?#", "@");
         if ((q >= p) && at(q, n, '@')) {
             checkChars(p, q, L_USERINFO, H_USERINFO, "user info");
             userInfo = substring(p, q);
-            p = q + 1;              // Skip '@'
+            p = q + 1;              // 跳过 '@'
         }
 
         // hostname, IPv4 address, or IPv6 address
+        // 主机名，IPV4地址或IPV6地址
         if (at(p, n, '[')) {
-            // DEVIATION from RFC2396: Support IPv6 addresses, per RFC2732
+            // 支持IPV6地址
             p++;
             q = scan(p, n, "/?#", "]");
             if ((q > p) && at(q, n, ']')) {
-                // look for a "%" scope id
+                // 查找% scope id
                 int r = scan (p, q, "", "%");
                 if (r > p) {
                     parseIPv6Reference(p, r);
@@ -2039,7 +1989,7 @@ private class Parser {
             p = q;
         }
 
-        // port
+        // 端口
         if (at(p, n, ':')) {
             p++;
             q = scan(p, n, "", "/");
@@ -2059,8 +2009,7 @@ private class Parser {
         return p;
     }
 
-    // Scan a string of decimal digits whose value fits in a byte
-    //
+    //扫描一个字符串可以装进一个字节的十进制数字
     private int scanByte(int start, int n)
         throws URISyntaxException
     {
@@ -2071,20 +2020,12 @@ private class Parser {
         return q;
     }
 
-    // Scan an IPv4 address.
+    // 扫描IPv4地址
+    //    
+    // 当区间内只有Ipv4地址没有其他字符是，strict变量为true,否则为假，则我们只获取Ipv4地址的开始
     //
-    // If the strict argument is true then we require that the given
-    // interval contain nothing besides an IPv4 address; if it is false
-    // then we only require that it start with an IPv4 address.
-    //
-    // If the interval does not contain or start with (depending upon the
-    // strict argument) a legal IPv4 address characters then we return -1
-    // immediately; otherwise we insist that these characters parse as a
-    // legal IPv4 address and throw an exception on failure.
-    //
-    // We assume that any string of decimal digits and dots must be an IPv4
-    // address.  It won't parse as a hostname anyway, so making that
-    // assumption here allows more meaningful exceptions to be thrown.
+    // 如果区间内没有包含Ipv4地址，则立即返回-1，否则我们断定这些字符可以解析成Ipv4地址并在失败时抛出异常
+    // 我们默认任何是十进制数字于点的字符串都是IPv4地址。不会解析成主机名，。
     //
     private int scanIPv4Address(int start, int n, boolean strict)
         throws URISyntaxException
@@ -2095,8 +2036,8 @@ private class Parser {
         if ((m <= p) || (strict && (m != n)))
             return -1;
         for (;;) {
-            // Per RFC2732: At most three digits per byte
-            // Further constraint: Each element fits in a byte
+            // 一个字节最多三个数字
+            // 每个元素可以放入要给字节
             if ((q = scanByte(p, m)) <= p) break;   p = q;
             if ((q = scan(p, m, '.')) <= p) break;  p = q;
             if ((q = scanByte(p, m)) <= p) break;   p = q;
@@ -2111,9 +2052,7 @@ private class Parser {
         return -1;
     }
 
-    // Take an IPv4 address: Throw an exception if the given interval
-    // contains anything except an IPv4 address
-    //
+    //从区间取出要给IPv4地址
     private int takeIPv4Address(int start, int n, String expected)
         throws URISyntaxException
     {
@@ -2123,9 +2062,7 @@ private class Parser {
         return p;
     }
 
-    // Attempt to parse an IPv4 address, returning -1 on failure but
-    // allowing the given interval to contain [:<characters>] after
-    // the IPv4 address.
+    // 尝试解析IPv4地址，失败返回-1但是允许给定的区间中在IPV4地址后包含[:<字符>]
     //
     private int parseIPv4Address(int start, int n) {
         int p;
@@ -2139,9 +2076,7 @@ private class Parser {
         }
 
         if (p > start && p < n) {
-            // IPv4 address is followed by something - check that
-            // it's a ":" as this is the only valid character to
-            // follow an address.
+            //IPv4地址后跟着一个字符，检查是否是":"，唯一的允许的字符
             if (charAt(p) != ':') {
                 p = -1;
             }
@@ -2153,19 +2088,18 @@ private class Parser {
         return p;
     }
 
-    // hostname      = domainlabel [ "." ] | 1*( domainlabel "." ) toplabel [ "." ]
-    // domainlabel   = alphanum | alphanum *( alphanum | "-" ) alphanum
-    // toplabel      = alpha | alpha *( alphanum | "-" ) alphanum
+    // 主机名      = 域名标签 [ "." ] | 1*( 域名标签 "." ) 顶级标签 [ "." ]
+    // 域名标签   = 字符数字 | 字符数字 *( 字符数字 | "-" ) 字符数字
+    // 顶级标签      = 字符 | 字符 *( 字符数字 | "-" ) 字符数字
     //
     private int parseHostname(int start, int n)
         throws URISyntaxException
     {
         int p = start;
         int q;
-        int l = -1;                 // Start of last parsed label
+        int l = -1;                 // 上一个解析的标签的开头
 
         do {
-            // domainlabel = alphanum [ *( alphanum | "-" ) alphanum ]
             q = scan(p, n, L_ALPHANUM, H_ALPHANUM);
             if (q <= p)
                 break;
@@ -2191,8 +2125,7 @@ private class Parser {
         if (l < 0)
             failExpecting("hostname", start);
 
-        // for a fully qualified hostname check that the rightmost
-        // label starts with an alpha character.
+        // 对一个完全合格的主机名，检查最后边的标签是以字符开始的
         if (l > start && !match(charAt(l), L_ALPHA, H_ALPHA)) {
             fail("Illegal character in hostname", l);
         }
@@ -2202,18 +2135,16 @@ private class Parser {
     }
 
 
-    // IPv6 address parsing, from RFC2373: IPv6 Addressing Architecture
+    // IPV6地址解析
     //
-    // Bug: The grammar in RFC2373 Appendix B does not allow addresses of
-    // the form ::12.34.56.78, which are clearly shown in the examples
-    // earlier in the document.  Here is the original grammar:
+    // Bug: RFC2373 附件B中的语法不允许类似于::12.34.56.78形式的地址，但在文档的前面却作为例子。以下是原始的语法：
     //
     //   IPv6address = hexpart [ ":" IPv4address ]
     //   hexpart     = hexseq | hexseq "::" [ hexseq ] | "::" [ hexseq ]
     //   hexseq      = hex4 *( ":" hex4)
     //   hex4        = 1*4HEXDIG
     //
-    // We therefore use the following revised grammar:
+    // 我们使用下面修改过的语法
     //
     //   IPv6address = hexseq [ ":" IPv4address ]
     //                 | hexseq [ "::" [ hexpost ] ]
@@ -2222,7 +2153,7 @@ private class Parser {
     //   hexseq      = hex4 *( ":" hex4)
     //   hex4        = 1*4HEXDIG
     //
-    // This covers all and only the following cases:
+    // 这覆盖了且只覆盖以下的情况:
     //
     //   hexseq
     //   hexseq : IPv4address
@@ -2235,13 +2166,11 @@ private class Parser {
     //   :: IPv4address
     //   ::
     //
-    // Additionally we constrain the IPv6 address as follows :-
+    // 其他沃恩对IPv6做了以下限制：
     //
-    //  i.  IPv6 addresses without compressed zeros should contain
-    //      exactly 16 bytes.
+    // 1.没有压缩0的ipv6地址应该限制在16字节
     //
-    //  ii. IPv6 addresses with compressed zeros should contain
-    //      less than 16 bytes.
+    // 2.压缩0的IPv6地址应该限制在少于16字节
 
     private int ipv6byteCount = 0;
 
@@ -2303,8 +2232,7 @@ private class Parser {
         return p;
     }
 
-    // Scan a hex sequence; return -1 if one could not be scanned
-    //
+    //扫描一个16进制序列，如果不能扫描则返回-1
     private int scanHexSeq(int start, int n)
         throws URISyntaxException
     {
@@ -2314,7 +2242,7 @@ private class Parser {
         q = scan(p, n, L_HEX, H_HEX);
         if (q <= p)
             return -1;
-        if (at(q, n, '.'))          // Beginning of IPv4 address
+        if (at(q, n, '.'))          // ipv4地址的开始
             return -1;
         if (q > p + 4)
             fail("IPv6 hexadecimal digit sequence too long", p);
@@ -2329,7 +2257,7 @@ private class Parser {
             q = scan(p, n, L_HEX, H_HEX);
             if (q <= p)
                 failExpecting("digits for an IPv6 address", p);
-            if (at(q, n, '.')) {    // Beginning of IPv4 address
+            if (at(q, n, '.')) {    // ipv4地址的开始
                 p--;
                 break;
             }
